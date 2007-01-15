@@ -38,7 +38,7 @@ public class SchemeScriptEngineFactory implements ScriptEngineFactory {
     }
 
     public String getEngineVersion() {
-        return "1.16.5";
+        return "1.11.3";
     }
 
     public List<String> getExtensions() {
@@ -76,26 +76,8 @@ public class SchemeScriptEngineFactory implements ScriptEngineFactory {
         return names;
     }
 
-    public String getOutputStatement(String toDisplay) {
-        StringBuffer buf = new StringBuffer();
-        buf.append("(display \"");
-        int len = toDisplay.length();
-        for (int i = 0; i < len; i++) {
-            char ch = toDisplay.charAt(i);
-            switch (ch) {
-            case '"': 
-                buf.append("\\\"");
-                break;
-            case '\\':
-                buf.append("\\\\");
-                break;
-            default:
-                buf.append(ch);
-                break;
-            }
-        }
-        buf.append("\")");
-        return buf.toString();
+    public String getOutputStatement(String str) {
+        return "(display " + str + ")";
     }
 
     public String getParameter(String key) {

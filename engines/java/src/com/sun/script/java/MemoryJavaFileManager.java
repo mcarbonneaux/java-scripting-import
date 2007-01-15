@@ -42,10 +42,6 @@ import javax.tools.JavaFileObject.Kind;
  * JavaFileManager that keeps compiled .class bytes in memory.
  */
 public final class MemoryJavaFileManager extends ForwardingJavaFileManager {                 
-
-    /** Java source file extension. */
-    private final static String EXT = ".java";
-
     private Map<String, byte[]> classBytes;
     
     public MemoryJavaFileManager(JavaFileManager fileManager) {
@@ -124,16 +120,12 @@ public final class MemoryJavaFileManager extends ForwardingJavaFileManager {
     static URI toURI(String name) {
         File file = new File(name);
         if (file.exists()) {
-            return file.toURI();
+            return new File(name).toURI();
         } else {
             try {
-                final StringBuffer newUri = new StringBuffer();
-                newUri.append("mfm:///");
-                newUri.append(name.replace('.', '/'));
-                if(name.endsWith(EXT)) newUri.replace(newUri.length() - EXT.length(), newUri.length(), EXT);
-                return URI.create(newUri.toString());
-            } catch (Exception exp) {
-                return URI.create("mfm:///com/sun/script/java/java_source");
+                return new URI("string", "com.sun.script.java", name);
+            } catch (URISyntaxException use) {
+                throw new RuntimeException(use);
             }
         }
     }

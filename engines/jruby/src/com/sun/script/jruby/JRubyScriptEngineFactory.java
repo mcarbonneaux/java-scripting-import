@@ -38,7 +38,7 @@ public class JRubyScriptEngineFactory implements ScriptEngineFactory {
     }
 
     public String getEngineVersion() {
-        return "0.9.2";
+        return "0.8.2";
     }
 
     public List<String> getExtensions() {
@@ -50,7 +50,7 @@ public class JRubyScriptEngineFactory implements ScriptEngineFactory {
     }
 
     public String getLanguageVersion() {
-        return "1.8.4";
+        return "1.8.2";
     }
 
     public String getMethodCallSyntax(String obj, String m, String... args) {
@@ -66,7 +66,6 @@ public class JRubyScriptEngineFactory implements ScriptEngineFactory {
             }
             buf.append(args[i]);
         }        
-        buf.append(')');
         return buf.toString();
     }
 
@@ -78,26 +77,8 @@ public class JRubyScriptEngineFactory implements ScriptEngineFactory {
         return names;
     }
 
-    public String getOutputStatement(String toDisplay) {
-        StringBuffer buf = new StringBuffer();
-        buf.append("print('");
-        int len = toDisplay.length();
-        for (int i = 0; i < len; i++) {
-            char ch = toDisplay.charAt(i);
-            switch (ch) {
-            case '\'':
-                buf.append("\\\'");
-                break;
-            case '\\':
-                buf.append("\\\\");
-                break;
-            default:
-                buf.append(ch);
-                break;
-            }
-        }
-        buf.append("')");
-        return buf.toString();
+    public String getOutputStatement(String str) {
+        return "print(" + str + ")";
     }
 
     public String getParameter(String key) {

@@ -25,7 +25,6 @@
 /*
  * JRubyScriptEngine.java
  * @author A. Sundararajan
- * @author Roberto Chinnici
  */
 
 package com.sun.script.jruby;
@@ -48,7 +47,7 @@ public class JRubyScriptEngine extends AbstractScriptEngine
 
     // my factory, may be null
     private ScriptEngineFactory factory;
-    private IRuby runtime;
+    private Ruby runtime;
    
     public JRubyScriptEngine() {
         init(System.getProperty("com.sun.script.jruby.loadpath"));
@@ -90,34 +89,21 @@ public class JRubyScriptEngine extends AbstractScriptEngine
     }
 
     // Invocable methods
-    public Object invokeFunction(String name, Object... args) 
+    public Object invoke(String name, Object... args) 
                          throws ScriptException, NoSuchMethodException {       
-        return invokeImpl(null, name, args, Object.class);
+        return invoke(null, name, args);
     }
 
-    public Object invokeMethod(Object obj, String name, Object... args) 
+    public Object invoke(Object obj, String name, Object... args) 
                          throws ScriptException, NoSuchMethodException {       
-        if (obj == null) {
-            throw new IllegalArgumentException("script object is null");
+        if (name == null) {
+            throw new NullPointerException("method name is null");
         }
-        return invokeImpl(obj, name, args, Object.class);
+
+        return invokeMethod(obj, name, args, Object.class);
     }
 
-    public <T> T getInterface(Object obj, Class<T> clazz) {
-        if (obj == null) {
-            throw new IllegalArgumentException("script object is null");
-        }
-        return makeInterface(obj, clazz);
-    }
-
-    public <T> T getInterface(Class<T> clazz) {
-        return makeInterface(null, clazz);
-    }
-
-    private <T> T makeInterface(Object obj, Class<T> clazz) {
-        if (clazz == null || !clazz.isInterface()) {
-            throw new IllegalArgumentException("interface Class expected");
-        }
+    public <T> T getInterface(final Object obj, Class<T> clazz) {
         final Object thiz = obj;
         return (T) Proxy.newProxyInstance(
               clazz.getClassLoader(),
@@ -125,10 +111,13 @@ public class JRubyScriptEngine extends AbstractScriptEngine
               new InvocationHandler() {
                   public Object invoke(Object proxy, Method m, Object[] args)
                                        throws Throwable {
-                      return invokeImpl(thiz, m.getName(),
-                                        args, m.getReturnType());
+                      return invokeMethod(obj, m.getName(), args, m.getReturnType());
                   }
               });
+    }
+
+    public <T> T getInterface(Class<T> clazz) {
+        return getInterface(null, clazz);
     }
 
     // ScriptEngine methods
@@ -180,7 +169,7 @@ public class JRubyScriptEngine extends AbstractScriptEngine
         }
         IRubyObject result = JavaUtil.convertJavaToRuby(runtime, value);
         if (result instanceof JavaObject) {
-            return runtime.getModule("JavaUtilities").callMethod(runtime.getCurrentContext(), "wrap", result);
+            return runtime.getModule("JavaUtilities").callMethod("wrap", result);
         }
         return result;
     }   
@@ -194,7 +183,7 @@ public class JRubyScriptEngine extends AbstractScriptEngine
             if (filename == null) {
                 filename = "<unknown>";
             }
-            return runtime.parse(script, filename, null);
+            return runtime.parse(script, filename);
         } catch (Exception exp) {
             throw new ScriptException(exp);
         } finally {
@@ -213,7 +202,7 @@ public class JRubyScriptEngine extends AbstractScriptEngine
             if (filename == null) {
                 filename = "<unknown>";
             }
-            return runtime.parse(reader, filename, null);
+            return runtime.parse(reader, filename);
         } catch (Exception exp) {
             throw new ScriptException(exp);
         } finally {
@@ -224,10 +213,8 @@ public class JRubyScriptEngine extends AbstractScriptEngine
     }
 
     private void setGlobalVariables(final ScriptContext ctx) {
-        ctx.setAttribute("context", ctx, ScriptContext.ENGINE_SCOPE);
+        ctx.setAttribute("$context", ctx, ScriptContext.ENGINE_SCOPE);
         setGlobalVariables(new GlobalVariables(runtime) {
-                GlobalVariables parent = runtime.getGlobalVariables();
-                
                 public void define(String name, IAccessor accessor) {
                     assert name != null;
                     assert accessor != null;
@@ -254,15 +241,7 @@ public class JRubyScriptEngine extends AbstractScriptEngine
                     assert name != null;
                     assert name.startsWith("$");
                     synchronized (ctx) {
-                        boolean defined = ctx.getAttributesScope(name) != -1;
-                        if (defined) {
-                            return true;
-                        } else {
-                            // skip '$' and check
-                            String modifiedName = name.substring(1);
-                            defined = ctx.getAttributesScope(modifiedName) != -1;
-                            return defined ? true : parent.isDefined(name);
-                        }
+                        return ctx.getAttributesScope(name) != -1;
                     }
                 }
 
@@ -290,20 +269,12 @@ public class JRubyScriptEngine extends AbstractScriptEngine
                 public IRubyObject get(String name) {
                     assert name != null;
                     assert name.startsWith("$");
-
-                    String modifiedName = name;
                     synchronized (ctx) {
                         int scope = ctx.getAttributesScope(name);
                         if (scope == -1) {
-                            // skip '$' and try
-                            modifiedName = name.substring(1);
-                            scope = ctx.getAttributesScope(modifiedName);
-                            if (scope == -1) {
-                                return parent.get(name);
-                            }
-                        } 
-
-                        Object obj = ctx.getAttribute(modifiedName, scope);
+                            scope = ScriptContext.ENGINE_SCOPE;
+                        }
+                        Object obj = ctx.getAttribute(name, scope);
                         if (obj instanceof IAccessor) {
                             return ((IAccessor)obj).getValue();
                         } else {
@@ -322,21 +293,17 @@ public class JRubyScriptEngine extends AbstractScriptEngine
 
                     synchronized (ctx) {
                         int scope = ctx.getAttributesScope(name);
-                        String modifiedName = name;
                         if (scope == -1) {
-                            // skip '$' and try
-                            modifiedName = name.substring(1);
-                            scope = ctx.getAttributesScope(modifiedName);
-                            if (scope == -1) {
-                                scope = ScriptContext.ENGINE_SCOPE;
-                            }
+                            scope = ScriptContext.ENGINE_SCOPE;
                         }
-                        IRubyObject oldValue = get(name);
-                        Object obj = ctx.getAttribute(modifiedName, scope);
+                        IRubyObject oldValue;
+                        Object obj = ctx.getAttribute(name, scope);
                         if (obj instanceof IAccessor) {
+                            oldValue = ((IAccessor)obj).getValue();
                             ((IAccessor)obj).setValue(value);
                         } else {                        
-                            ctx.setAttribute(modifiedName, rubyToJava(value), scope);
+                            oldValue = javaToRuby(obj);
+                            ctx.setAttribute(name, rubyToJava(value), scope);
                         }
                         return oldValue;
                     }
@@ -354,16 +321,22 @@ public class JRubyScriptEngine extends AbstractScriptEngine
                             }
                         }
                     }
-                    for (Iterator names = parent.getNames(); names.hasNext();) {
-                        list.add(names.next());
-                    }
                     return Collections.unmodifiableList(list).iterator();
                 }
             });
     }
 
     private void setGlobalVariables(GlobalVariables globals) {
-        runtime.setGlobalVariables(globals);
+        // !!HACK!! org.jruby.Ruby does not expose setGlobalVariables() method.
+        // Also, this class is final and therefore can not be extendeded.
+        // I am using reflection to set the field value!! 
+        try {
+            Field globalsField = Ruby.class.getDeclaredField("globalVariables");
+            globalsField.setAccessible(true);
+            globalsField.set(runtime, globals);
+        } catch (Exception exp) {
+            throw new RuntimeException(exp);
+        }
     }
 
     private synchronized Object evalNode(Node node, ScriptContext ctx) 
@@ -391,13 +364,9 @@ public class JRubyScriptEngine extends AbstractScriptEngine
         runtime.getLoadService().require("java");
     }
 
-    private Object invokeImpl(final Object obj, String method, 
+    private Object invokeMethod(final Object obj, String method, 
                         Object[] args, Class returnType)
                         throws ScriptException {
-        if (method == null) {
-            throw new NullPointerException("method name is null");
-        }
-
         try {
             IRubyObject rubyRecv = obj != null ? 
                   JavaUtil.convertJavaToRuby(runtime, obj) : runtime.getTopSelf();
@@ -409,11 +378,11 @@ public class JRubyScriptEngine extends AbstractScriptEngine
             for (int i = 0; i < rubyArgs.length; i++) {
                 IRubyObject tmp = rubyArgs[i];
                 if (tmp instanceof JavaObject) {
-                    rubyArgs[i] = javaUtilities.callMethod(runtime.getCurrentContext(), "wrap", tmp);
+                    rubyArgs[i] = javaUtilities.callMethod("wrap", tmp);
                 }
             }
 
-            IRubyObject result = rubyRecv.callMethod(runtime.getCurrentContext(), method, rubyArgs);
+            IRubyObject result = rubyRecv.callMethod(method, rubyArgs);
             return rubyToJava(result, returnType);
         } catch (Exception exp) {
             throw new ScriptException(exp);

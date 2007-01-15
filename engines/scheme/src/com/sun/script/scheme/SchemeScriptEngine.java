@@ -41,7 +41,6 @@ import sisc.interpreter.*;
 import sisc.io.*;
 import sisc.modules.s2j.*;
 import sisc.ser.*;
-import sisc.reader.SourceReader;
 
 public class SchemeScriptEngine extends AbstractScriptEngine 
         implements Invocable { 
@@ -103,25 +102,23 @@ public class SchemeScriptEngine extends AbstractScriptEngine
     }
    
     // Invocable methods
-    public Object invokeFunction(String name, Object... args) 
+    public Object invoke(String name, Object... args) 
                          throws ScriptException, NoSuchMethodException {       
-        return invokeImpl(null, name, args);
+        return invoke(null, name, args);
     }
 
-    public Object invokeMethod(Object obj, String name, Object... args) 
-                         throws ScriptException, NoSuchMethodException {       
-        if (obj == null) {
-            throw new IllegalArgumentException("script object is null");
-        }
-        return invokeImpl(obj, name, args);
-    }
-        
-    private Object invokeImpl(Object obj, final String name,
-                              final Object... args) 
+    public Object invoke(Object obj, final String name, final Object... args) 
                          throws ScriptException, NoSuchMethodException {       
         if (name == null) {
             throw new NullPointerException("method name is null");
         }
+         
+        if (obj != null) {
+            // no explicit support for objects yet.
+            // Should I use generic procedures ??
+            throw new NoSuchMethodException(name);
+        }
+
         Value tmp = null;
         if (obj != null) {
             if (obj instanceof Value) {
@@ -144,8 +141,6 @@ public class SchemeScriptEngine extends AbstractScriptEngine
                     }
                 }
             });
-        } catch (SchemeException se) {
-            throw new ScriptException(se);
         } catch (RuntimeException re) {
             handleRuntimeException2(re);
             // should not reach here..
@@ -154,32 +149,24 @@ public class SchemeScriptEngine extends AbstractScriptEngine
     }    
 
     public <T> T getInterface(Object obj, Class<T> clazz) {
-        if (obj == null) {
-            throw new IllegalArgumentException("script object is null");
+        if (obj != null) {
+            return null;
         }
-        return makeInterface(obj, clazz);
-    }
-
-    public <T> T getInterface(Class<T> clazz) {
-        return makeInterface(null, clazz);
-    }
-
-    private <T> T makeInterface(Object obj, Class<T> clazz) {
-        if (clazz == null || !clazz.isInterface()) {
-            throw new IllegalArgumentException("interface Class expected");
-        }
-        final Object thiz = obj;
         return (T) Proxy.newProxyInstance(
               clazz.getClassLoader(),
               new Class[] { clazz },
               new InvocationHandler() {
                   public Object invoke(Object proxy, Method m, Object[] args)
                                        throws Throwable {
-                      return invokeImpl(thiz, m.getName(), args);
+                      return SchemeScriptEngine.this.invoke(
+                                       null, m.getName(), args);
                   }
               });
     }
 
+    public <T> T getInterface(Class<T> clazz) {
+        return getInterface(null, clazz);
+    }
 
     // ScriptEngine methods
     public Object eval(String str, ScriptContext ctx) 
@@ -199,8 +186,6 @@ public class SchemeScriptEngine extends AbstractScriptEngine
                     }
                 }
             });
-        } catch (SchemeException se) {
-            throw new ScriptException(se);
         } catch (RuntimeException re) {
             handleRuntimeException(re);
             // should not reach here..
@@ -288,8 +273,8 @@ public class SchemeScriptEngine extends AbstractScriptEngine
                         throws ScriptException {
         try {
             initContext(interp, ctx);
-            Value res = interp.evalInput(new SourceReader(
-                           new BufferedReader(reader), getFileName(ctx)));
+            Value res = interp.evalInput(new ReaderInputPort(
+                                 new BufferedReader(reader)));
             return scheme2java(res);
         } catch (Exception exp) {
             throw new ScriptException(exp);
@@ -380,28 +365,23 @@ public class SchemeScriptEngine extends AbstractScriptEngine
     }
 
     private void initApp() {
-        try {
-            SeekableInputStream his = findHeap();                        
-            SeekableDataInputStream in = new SeekableDataInputStream(his);                 
-            appContext.loadEnv(in);
-        } catch (IOException ie) {
-            throw new RuntimeException(ie);
-        } catch (ClassNotFoundException cnfe) {
-            throw new RuntimeException(cnfe);
-        }
+        Context.execute(appContext, new SchemeCaller() {
+                public Object execute(Interpreter interp) {
+                    try {
+                        SeekableInputStream his = findHeap();                        
+                        SeekableDataInputStream in = new SeekableDataInputStream(his);                 
+                        appContext.loadEnv(interp, in);
+                        return null;
+                    } catch (Exception exp) {
+                        exp.printStackTrace();
+                        throw new RuntimeException(exp);
+                    } 
+                }
+        });
     }
 
     private static long sequence = 0L;
     private synchronized static String uniqueName() {
         return "com.sun.script.scheme.AppContext@" + Long.toString(sequence++);
     }    
-
-    private static String getFileName(ScriptContext ctx) {
-        Object name = ctx.getAttribute(ScriptEngine.FILENAME);
-        if (name instanceof String) {
-            return name.toString();
-        } else {
-            return "<unknown>";
-        }
-    }
 }

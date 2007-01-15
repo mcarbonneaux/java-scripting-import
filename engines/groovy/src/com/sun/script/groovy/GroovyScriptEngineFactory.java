@@ -31,29 +31,19 @@
 package com.sun.script.groovy;
 import javax.script.*;
 import java.util.*;
+import com.sun.script.util.*;
 
-public class GroovyScriptEngineFactory implements ScriptEngineFactory {
+public class GroovyScriptEngineFactory extends ScriptEngineFactoryBase {
     
-    public String getEngineName() {
-        return "groovy";
-    }
-
-    public String getEngineVersion() {
-        return org.codehaus.groovy.runtime.InvokerHelper.getVersion();
-    }
-
-    public String getLanguageName() {
-        return "groovy";
-    }
-
-    public String getLanguageVersion() {
-        return "1.0";
+    
+    public GroovyScriptEngineFactory() {
     }
     
+   
     public List<String> getExtensions() {
         return extensions;
     }
-
+    
     public List<String> getMimeTypes() {
         return mimeTypes;
     }
@@ -69,11 +59,11 @@ public class GroovyScriptEngineFactory implements ScriptEngineFactory {
         } else if (key.equals(ScriptEngine.ENGINE)) {
             return "Groovy Script Engine";
         } else if (key.equals(ScriptEngine.ENGINE_VERSION)) {
-            return org.codehaus.groovy.runtime.InvokerHelper.getVersion();
+            return "1.0";
         } else if (key.equals(ScriptEngine.LANGUAGE)) {
             return "Groovy";
         } else if (key.equals(ScriptEngine.LANGUAGE_VERSION)) {
-            return "1.0";
+            return "1.0-jsr-05";
         } else if (key.equals("THREADING")) {
             return "MULTITHREADED";
         } else {
@@ -109,35 +99,16 @@ public class GroovyScriptEngineFactory implements ScriptEngineFactory {
     }    
     
     public String getOutputStatement(String toDisplay) {
-        StringBuffer buf = new StringBuffer();
-        buf.append("println(\"");
-        int len = toDisplay.length();
-        for (int i = 0; i < len; i++) {
-            char ch = toDisplay.charAt(i);
-            switch (ch) {
-            case '"':
-                buf.append("\\\"");
-                break;
-            case '\\':
-                buf.append("\\\\");
-                break;
-            default:
-                buf.append(ch);
-                break;
-            }
-        }
-        buf.append("\")");
-        return buf.toString();
+        return "println(" + toDisplay + ")";
     }    
     
     public String getProgram(String... statements) {
-        StringBuffer ret = new StringBuffer();
+        String ret = "";
         int len = statements.length;
         for (int i = 0; i < len; i++) {
-            ret.append(statements[i]);
-            ret.append('\n');
+            ret += statements[i] + ";";
         }
-        return ret.toString();
+        return ret;
     }
 
     private static List<String> names;

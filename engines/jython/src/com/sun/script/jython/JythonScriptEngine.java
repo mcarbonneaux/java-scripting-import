@@ -86,24 +86,17 @@ public class JythonScriptEngine extends AbstractScriptEngine
     }
 
     // Invocable methods
-    public Object invokeFunction(String name, Object... args) 
+    public Object invoke(String name, Object... args) 
                          throws ScriptException, NoSuchMethodException {       
-        return invokeImpl(null, name, args);
+        return invoke(null, name, args);
     }
 
-    public Object invokeMethod(Object obj, String name, Object... args) 
-                         throws ScriptException, NoSuchMethodException {       
-        if (obj == null) {
-            throw new IllegalArgumentException("script object is null");
-        }
-        return invokeImpl(obj, name, args);
-    }
-
-    private Object invokeImpl(Object obj, String name, Object... args) 
+    public Object invoke(Object obj, String name, Object... args) 
                          throws ScriptException, NoSuchMethodException {       
         if (name == null) {
             throw new NullPointerException("method name is null");
         }
+
         setSystemState();
          
         PyObject thiz;
@@ -134,20 +127,6 @@ public class JythonScriptEngine extends AbstractScriptEngine
     
 
     public <T> T getInterface(Object obj, Class<T> clazz) {
-        if (obj == null) {
-            throw new IllegalArgumentException("script object is null");
-        }
-        return makeInterface(obj, clazz);
-    }
-
-    public <T> T getInterface(Class<T> clazz) {
-        return makeInterface(null, clazz);
-    }
-
-    private <T> T makeInterface(Object obj, Class<T> clazz) {
-        if (clazz == null || !clazz.isInterface()) {
-            throw new IllegalArgumentException("interface Class expected");
-        }
         final Object thiz = obj;
         return (T) Proxy.newProxyInstance(
               clazz.getClassLoader(),
@@ -155,13 +134,16 @@ public class JythonScriptEngine extends AbstractScriptEngine
               new InvocationHandler() {
                   public Object invoke(Object proxy, Method m, Object[] args)
                                        throws Throwable {
-                      Object res = invokeImpl(
+                      Object res = JythonScriptEngine.this.invoke(
                                        thiz, m.getName(), args);                      
                       return py2java(java2py(res), m.getReturnType());
                   }
               });
     }
 
+    public <T> T getInterface(Class<T> clazz) {
+        return getInterface(null, clazz);
+    }
 
     // ScriptEngine methods
     public Object eval(String str, ScriptContext ctx) 
@@ -269,11 +251,11 @@ public class JythonScriptEngine extends AbstractScriptEngine
              * These are "single", "eval" and "exec". I don't clearly understand
              * the difference. But, with "eval" and "exec" certain features are
              * not working. For eg. with "eval" assignments are not working. 
-             * I've used "exec". But, that is customizable by special attribute.
+             * I've used "single". But, that is customizable by special attribute.
              */
             String mode = (String) ctx.getAttribute(JYTHON_COMPILE_MODE);
             if (mode == null) {
-                mode = "exec";
+                mode = "single";
             }
             return __builtin__.compile(script, fileName, mode);
         } catch (Exception exp) {
@@ -294,16 +276,23 @@ public class JythonScriptEngine extends AbstractScriptEngine
     }
 
     private String readFully(Reader reader) throws ScriptException { 
-        char[] arr = new char[8*1024]; // 8K at a time
+        BufferedReader in;
+        if (! (reader instanceof BufferedReader)) {
+            in = new BufferedReader(reader);
+        } else {
+            in = (BufferedReader) reader;
+        }
         StringBuffer buf = new StringBuffer();
-        int numChars;
         try {
-            while ((numChars = reader.read(arr, 0, arr.length)) > 0) {
-                buf.append(arr, 0, numChars);
+            String s = in.readLine();
+            while (s != null) {
+                buf.append("\n");
+                buf.append(s);
+                s = in.readLine();
             }
+            return buf.toString();            
         } catch (IOException exp) {
             throw new ScriptException(exp);
-        }
-        return buf.toString();
+        }         
     }
 }

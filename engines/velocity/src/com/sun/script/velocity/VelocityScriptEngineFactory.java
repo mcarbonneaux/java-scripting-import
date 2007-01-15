@@ -137,8 +137,7 @@ public class VelocityScriptEngineFactory implements ScriptEngineFactory {
     private static List<String> extensions;
     private static List<String> mimeTypes;
     static {
-        names = new ArrayList<String>(2);
-        names.add("Velocity");
+        names = new ArrayList<String>(1);
         names.add("velocity");
         names = Collections.unmodifiableList(names);
         extensions = new ArrayList<String>(1);

@@ -272,7 +272,7 @@ public class XPathScriptEngine extends AbstractScriptEngine
        return new XPathFunction() {
             public Object evaluate(List args) {
                 try {
-                    return invocable.invokeFunction(funcName, args.toArray());
+                    return invocable.invoke(funcName, args.toArray());
                 } catch (Exception exp) {
                     throw new RuntimeException(exp);
                 }
@@ -380,16 +380,21 @@ public class XPathScriptEngine extends AbstractScriptEngine
     }
 
     private String readFully(Reader reader) throws ScriptException { 
-        char[] arr = new char[8*1024]; // 8K at a time
+        BufferedReader in;
+        if (! (reader instanceof BufferedReader)) {
+            in = new BufferedReader(reader);
+        } else {
+            in = (BufferedReader) reader;
+        }
         StringBuffer buf = new StringBuffer();
-        int numChars;
         try {
-            while ((numChars = reader.read(arr, 0, arr.length)) > 0) {
-                buf.append(arr, 0, numChars);
+            int ch = -1;
+            while ((ch = in.read()) != -1) {
+                buf.append((char)ch);
             }
+            return buf.toString();            
         } catch (IOException exp) {
             throw new ScriptException(exp);
-        }
-        return buf.toString();
+        }         
     }
 }
