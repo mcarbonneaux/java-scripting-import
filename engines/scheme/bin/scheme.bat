@@ -1,1 +1,0 @@
-jrunscript -cp ../build/scheme-engine.jar;../lib/sisc.jar;../lib/sisc-lib.jar;../lib/sisc-opt.jar -l sisc  %*
